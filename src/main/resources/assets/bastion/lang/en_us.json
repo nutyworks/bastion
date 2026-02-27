@@ -1,0 +1,16 @@
+{
+  "key.category.bastion.debugger": "Bastion Debugger",
+  "key.bastion.breakpoint": "Toggle Block Breakpoint",
+  "key.bastion.resume": "Resume",
+  "key.bastion.step_into": "Step Into",
+  "key.bastion.step_over": "Step Over",
+  "command.bastion.breakpoint.function.success.set": "Set breakpoint for function %s at line %s",
+  "command.bastion.breakpoint.function.success.removed": "Removed breakpoint for function %s at line %s",
+  "command.bastion.breakpoint.block.success.set": "Set breakpoint at %s, %s, %s",
+  "command.bastion.breakpoint.block.success.removed": "Removed breakpoint at %s, %s, %s",
+  "bastion.debugger.paused.player": "player %s",
+  "bastion.debugger.paused.block": "block at %s, %s, %s",
+  "bastion.debugger.paused.function": "function %s at line %s",
+  "bastion.debugger.breakpoint": "⏸ Breakpoint: %s",
+  "bastion.debugger.key_usage": "▶ [%s] Resume [%s] Step Over [%s] Step Into [Shift+%s] Step Out"
+}
