@@ -23,7 +23,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.jspecify.annotations.NonNull;
 import works.nuty.bastion.action.MacroLineAction;
 import works.nuty.bastion.action.PlainLineAction;
 import works.nuty.bastion.network.BastionResumePayload;

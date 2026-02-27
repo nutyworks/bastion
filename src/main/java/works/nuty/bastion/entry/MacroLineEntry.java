@@ -10,7 +10,6 @@ import net.minecraft.commands.functions.MacroFunction;
 import net.minecraft.commands.functions.StringTemplate;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.NonNull;
-import works.nuty.bastion.Bastion;
 import works.nuty.bastion.action.MacroLineAction;
 import works.nuty.bastion.action.PlainLineAction;
 

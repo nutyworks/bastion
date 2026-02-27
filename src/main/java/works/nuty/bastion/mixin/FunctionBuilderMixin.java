@@ -5,7 +5,6 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import it.unimi.dsi.fastutil.ints.IntList;
 import net.minecraft.commands.ExecutionCommandSource;
-import net.minecraft.commands.execution.UnboundEntryAction;
 import net.minecraft.commands.functions.*;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
