@@ -10,6 +10,7 @@ import net.minecraft.commands.execution.ExecutionContext;
 import net.minecraft.commands.execution.Frame;
 import net.minecraft.commands.execution.tasks.BuildContexts;
 import net.minecraft.network.chat.Component;
+import org.apache.commons.lang3.tuple.Triple;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -66,16 +67,22 @@ public class BuildContextsMixin<T extends ExecutionCommandSource<T>> {
 
     @Unique
     private void pauseIfNeeded(final Frame frame, final ContextChain<T> currentStage, final List<T> currentSources) {
+        if (Bastion.funcBreakpoints.isEmpty() && Bastion.blockBreakpoints.isEmpty()) return;
+
         final StringRange range = currentStage.getTopContext().getRange();
         final Component cmd = Component.literal(this.commandInput.substring(0, range.getStart())).withColor(0xFFAAAAAA)
             .append(Component.literal(range.get(this.commandInput)).withColor(0xFFFFFFFF))
             .append(Component.literal(this.commandInput.substring(range.getEnd())));
 
-        final Bastion.PauseType pauseType = Bastion.getPauseType((BuildContexts<?>) (Object) this, frame, false);
+        while (!Bastion.callstack.isEmpty() && frame.depth() <= Bastion.callstack.peek().depth()) {
+            Bastion.callstack.pop();
+        }
 
-        if (pauseType != Bastion.PauseType.NONE) {
-            //noinspection unchecked; T is always CommandSourceStack.
-            Bastion.pause(pauseType, cmd, frame.depth(), (List<CommandSourceStack>) currentSources);
+        final Bastion.InitialSource initialSource = Bastion.getInitialSource((BuildContexts<?>) (Object) this);
+        Bastion.callstack.push(Bastion.CallStackEntry.of(frame.depth(), initialSource, cmd));
+
+        if (Bastion.shouldPause(initialSource, frame)) {
+            Bastion.pause(initialSource, cmd, frame.depth(), (List<CommandSourceStack>) currentSources);
         }
     }
 }

@@ -12,5 +12,6 @@
   "bastion.debugger.paused.block": "block at %s, %s, %s",
   "bastion.debugger.paused.function": "function %s at line %s",
   "bastion.debugger.breakpoint": "⏸ Breakpoint: %s",
+  "bastion.debugger.depth": "Depth: %s",
   "bastion.debugger.key_usage": "▶ [%s] Resume [%s] Step Over [%s] Step Into [Shift+%s] Step Out"
 }

@@ -21,20 +21,20 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.commands.FunctionCommand;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
+import net.minecraft.util.ArrayListDeque;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import works.nuty.bastion.action.MacroLineAction;
 import works.nuty.bastion.action.PlainLineAction;
 import works.nuty.bastion.network.BastionResumePayload;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class Bastion implements ModInitializer {
 	public static final String MOD_ID = "bastion";
 	public static final Logger LOGGER = LogManager.getLogger(MOD_ID);
 
+	public static ArrayListDeque<CallStackEntry> callstack = new ArrayListDeque<>();
 	public static MutableComponent debugLocation = Component.empty();
 	public static Component debugCommand = Component.empty();
 
@@ -42,7 +42,6 @@ public class Bastion implements ModInitializer {
 	public static final Set<FunctionBreakpoint> funcBreakpoints = new HashSet<>();
 
 	public static volatile boolean paused = false;
-	public static volatile PauseType currentPauseType = PauseType.NONE;
 	public static volatile List<CommandSourceStack> currentPauseSources = List.of();
 	public static volatile StepMode currentStepMode = StepMode.NONE;
 	public static volatile int targetDepth = -1;
@@ -168,82 +167,80 @@ public class Bastion implements ModInitializer {
 		});
 	}
 
-	public static PauseType getPauseType(final BuildContexts<?> contexts, final Frame frame, final boolean forced) {
-		if (!forced && (currentStepMode == StepMode.INTO || (currentStepMode == StepMode.OVER || currentStepMode == StepMode.OUT) && frame.depth() <= targetDepth)) {
-			return getPauseType(contexts, frame, true);
-		}
+	public static InitialSource getInitialSource(final BuildContexts<?> contexts) {
 		if (contexts instanceof BuildContexts.TopLevel<?> topLevelInstance) {
-			return getPauseTypeTopLevel(topLevelInstance, forced);
-		}
-		if (contexts instanceof BuildContexts.Continuation<?> continuationInstance) {
-			return getPauseTypeContinuation(continuationInstance, forced);
-		}
-		if (contexts instanceof PlainLineAction<?> fnInstance) {
-			return getPauseTypePlainFunction(fnInstance, forced);
-		}
-		if (contexts instanceof MacroLineAction<?> fnInstance) {
-			return getPauseTypeMacroFunction(fnInstance, forced);
+			return getInitialSourceTopLevel(topLevelInstance);
+		} else if (contexts instanceof BuildContexts.Continuation<?> continuationInstance) {
+			return getInitialSourceContinuation(continuationInstance);
+		} else if (contexts instanceof PlainLineAction<?> fnInstance) {
+			return getInitialSourcePlainFunction(fnInstance);
+		} else if (contexts instanceof MacroLineAction<?> fnInstance) {
+			return getInitialSourceMacroFunction(fnInstance);
 		}
 
-		return PauseType.NONE;
+		Bastion.LOGGER.error("context got {}", contexts);
+		throw new IllegalStateException("Could not match contexts to execution source");
 	}
 
-	private static PauseType getPauseTypeTopLevel(final BuildContexts.TopLevel<?> contexts, final boolean forced) {
+	private static InitialSource getInitialSourceTopLevel(final BuildContexts.TopLevel<?> contexts) {
 		final CommandSourceStack source = ((BuildContexts.TopLevel<CommandSourceStack>) contexts).source;
-		return getPauseTypeSource(forced, source);
+		return getPauseTypeSource(source);
 	}
 
-	private static PauseType getPauseTypeContinuation(final BuildContexts.Continuation<?> contexts, final boolean forced) {
+	private static InitialSource getInitialSourceContinuation(final BuildContexts.Continuation<?> contexts) {
 		final CommandSourceStack source = ((BuildContexts.Continuation<CommandSourceStack>) contexts).originalSource;
-		return getPauseTypeSource(forced, source);
+		return getPauseTypeSource(source);
 	}
 
-	private static Bastion.PauseType getPauseTypeSource(boolean forced, CommandSourceStack source) {
-		if (forced && source.isPlayer()) {
-			return new PauseType.Player(source.getPlayer());
+	private static InitialSource getPauseTypeSource(CommandSourceStack source) {
+		if (source.isPlayer()) {
+			return InitialSource.player(source.getPlayer());
 		} else {
-			BlockPos pos = BlockPos.containing(source.getPosition());
-
-			if (forced || blockBreakpoints.contains(pos)) {
-				return new PauseType.Block(pos);
-			} else {
-				return PauseType.NONE;
-			}
+			return InitialSource.block(BlockPos.containing(source.getPosition()));
 		}
 	}
 
-	private static PauseType getPauseTypePlainFunction(final PlainLineAction<?> contexts, final boolean forced) {
+	private static InitialSource getInitialSourcePlainFunction(final PlainLineAction<?> contexts) {
 		final Identifier id = contexts.functionId;
 		final int line = contexts.lineNumber;
 
-		if (forced || funcBreakpoints.contains(new FunctionBreakpoint(id, line))) {
-			return new PauseType.Function(id, line);
-		} else {
-			return PauseType.NONE;
-		}
+		return InitialSource.function(id, line);
 	}
 
-	private static PauseType getPauseTypeMacroFunction(final MacroLineAction<?> contexts, final boolean forced) {
+	private static InitialSource getInitialSourceMacroFunction(final MacroLineAction<?> contexts) {
 		final Identifier id = contexts.functionId;
 		final int line = contexts.lineNumber;
 
-		if (forced || funcBreakpoints.contains(new FunctionBreakpoint(id, line))) {
-			return new PauseType.Function(id, line);
-		} else {
-			return PauseType.NONE;
-		}
+		return InitialSource.function(id, line);
 	}
 
-	public static void pause(final PauseType pauseType, final Component command, final int depth, final List<CommandSourceStack> sources) {
+	public static boolean shouldPause(final InitialSource initialSource, final Frame frame) {
+		if (currentStepMode == StepMode.INTO || (currentStepMode == StepMode.OVER || currentStepMode == StepMode.OUT) && frame.depth() <= targetDepth) {
+			return true;
+		}
+
+		switch (initialSource) {
+            case InitialSource.Block block -> {
+				return blockBreakpoints.contains(block.blockPos);
+            }
+            case InitialSource.Function function -> {
+				return funcBreakpoints.contains(new FunctionBreakpoint(function.id, function.line));
+            }
+            case InitialSource.Player player -> {
+				return false;
+            }
+        }
+	}
+
+	public static void pause(final InitialSource initialSource, final Component command, final int depth, final List<CommandSourceStack> sources) {
 		paused = true;
-		currentPauseType = pauseType;
 		currentPauseSources = sources;
 		currentStepMode = Bastion.StepMode.NONE;
-		debugLocation = pauseType.toComponent();
+		debugLocation = initialSource.toComponent();
 		debugCommand = command;
 		lastPausedDepth = depth;
 
-		Bastion.LOGGER.info("PauseType: " + pauseType);
+		Bastion.LOGGER.info("PauseType: " + initialSource);
 		server.managedBlock(() -> {
             server.getConnection().tick();
             return !paused || !server.isRunning();
@@ -252,7 +249,6 @@ public class Bastion implements ModInitializer {
 
 	public static void resume() {
 		paused = false;
-		currentPauseType = PauseType.NONE;
 		currentPauseSources = List.of();
 	}
 
@@ -260,34 +256,44 @@ public class Bastion implements ModInitializer {
 
 	public enum StepMode { NONE, INTO, OUT, OVER }
 
-	public sealed interface PauseType {
-		record Player(ServerPlayer player) implements PauseType {
+	public sealed interface InitialSource {
+		record Player(ServerPlayer player) implements InitialSource {
 			@Override
 			public MutableComponent toComponent() {
 				return Component.translatable("bastion.debugger.paused.player", this.player.getName());
 			}
 		}
-		record Block(BlockPos blockPos) implements PauseType {
+		record Block(BlockPos blockPos) implements InitialSource {
 			@Override
 			public MutableComponent toComponent() {
 				return Component.translatable("bastion.debugger.paused.block", this.blockPos.getX(), this.blockPos.getY(), this.blockPos.getZ());
 			}
 		}
-		record Function(Identifier id, int line) implements PauseType {
+		record Function(Identifier id, int line) implements InitialSource {
 			@Override
 			public MutableComponent toComponent() {
 				return Component.translatable("bastion.debugger.paused.function", Component.translationArg(id), line);
 			}
 		}
-		final class None implements PauseType {
-			@Override
-			public MutableComponent toComponent() {
-				return Component.empty();
-			}
-		}
-
-		PauseType.None NONE = new PauseType.None();
 
 		MutableComponent toComponent();
+
+		static Player player(final ServerPlayer player) {
+			return new Player(player);
+		}
+
+		static Block block(final BlockPos blockPos) {
+			return new Block(blockPos);
+		}
+
+		static Function function(final Identifier id, final int line) {
+			return new Function(id, line);
+		}
+	}
+
+	public record CallStackEntry(int depth, InitialSource initialSource, Component command) {
+		public static CallStackEntry of(int depth, InitialSource initialSource, Component command) {
+			return  new CallStackEntry(depth, initialSource, command);
+		}
 	}
 }
