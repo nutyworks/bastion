@@ -26,9 +26,12 @@ public class DebugLevelRenderer implements LevelRenderEvents.EndMain {
         final DistinctColorGenerator colorGenerator = new DistinctColorGenerator();
         BlockPos pausedPos = null;
 
-        if (Bastion.paused && Bastion.currentPauseType instanceof Bastion.PauseType.Block(BlockPos blockPos)) {
-            pausedPos = blockPos;
-            Gizmos.cuboid(blockPos, 1/128f, GizmoStyle.strokeAndFill(BREAKPOINT_BLOCK_STROKE_COLOR, 1, BREAKPOINT_BLOCK_FILL_COLOR_ACTIVE));
+        if (Bastion.paused) {
+            Bastion.InitialSource initialSource = Bastion.callstack.peek().initialSource();
+            if (initialSource instanceof Bastion.InitialSource.Block(BlockPos blockPos)) {
+                pausedPos = blockPos;
+                Gizmos.cuboid(blockPos, 1 / 128f, GizmoStyle.strokeAndFill(BREAKPOINT_BLOCK_STROKE_COLOR, 1, BREAKPOINT_BLOCK_FILL_COLOR_ACTIVE));
+            }
         }
 
         for (BlockPos pos : Bastion.blockBreakpoints) {
